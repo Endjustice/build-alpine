@@ -1,0 +1,27 @@
+name: Build Optimized Alpine for Termux
+on: [push, workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install QEMU and Tools
+        run: sudo apt-get update && sudo apt-get install -y qemu-system-arm qemu-utils
+
+      - name: Download & Resize Image
+        run: |
+          wget https://[لینک_ایمیج_آلپاین_تو] -O alpine.qcow2
+          qemu-img resize alpine.qcow2 5G
+
+      - name: Inject Configuration (The Magic Part)
+        run: |
+          # اینجا می‌توانیم با استفاده از qemu-nbd یا نصب موقت، 
+          # تنظیمات داکر و حذف cloud-init را انجام دهیم.
+          # یا خیلی ساده یک اسکریپت داخلش اجرا کنیم.
+          
+      - name: Upload Result
+        uses: actions/upload-artifact@v4
+        with:
+          name: alpine-ready-for-docker
+          path: alpine.qcow2
+          
