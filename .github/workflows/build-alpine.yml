@@ -13,21 +13,31 @@ jobs:
 
       - name: Download Alpine
         run: |
+          # دانلود آخرین نسخه پایدار و رسمی
           wget https://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/cloud/nocloud_alpine-3.23.3-aarch64-uefi-cloudinit-metal-r0.qcow2 -O alpine.qcow2
 
       - name: Surgical Operation
         run: |
           export LIBGUESTFS_BACKEND=direct
           sudo guestfish -a alpine.qcow2 -i <<EOF
-          glob rm /etc/runlevels/default/cloud-*
-          glob rm /etc/runlevels/boot/cloud-*
-          glob rm /etc/runlevels/shutdown/cloud-*
+          # حذف سرویس‌های مزاحم با علامت (-) برای جلوگیری از ارور در صورت نبودن فایل
+          -glob rm /etc/runlevels/default/cloud-*
+          -glob rm /etc/runlevels/boot/cloud-*
+          -glob rm /etc/runlevels/shutdown/cloud-*
+          
+          # تنظیم مخازن پکیج‌ها برای نصب داکر در گوشی
           write /etc/apk/repositories "https://dl-cdn.alpinelinux.org/alpine/latest-stable/main\nhttps://dl-cdn.alpinelinux.org/alpine/latest-stable/community"
+          
+          # جراحی فایل passwd برای حذف پسورد روت (Login بدون پسورد)
           download /etc/passwd /tmp/passwd
           sh "sed -i 's/root:x:/root::/' /tmp/passwd"
           upload /tmp/passwd /etc/passwd
-          sh "echo 'ttyAMA0' >> /etc/securetty" || write /etc/securetty "ttyAMA0"
+          
+          # تنظیم DNS گوگل برای اینترنت فوری
           write /etc/resolv.conf "nameserver 8.8.8.8"
+          
+          # اجازه لاگین از طریق ترمینال سریال (مهم برای QEMU)
+          -write /etc/securetty "ttyAMA0"
           EOF
 
       - name: Upload Result
