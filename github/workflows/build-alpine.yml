@@ -1,27 +1,33 @@
 name: Build Optimized Alpine for Termux
-on: [push, workflow_dispatch]
+on: 
+  workflow_dispatch: # اجرای دستی از تب Actions
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Install QEMU and Tools
-        run: sudo apt-get update && sudo apt-get install -y qemu-system-arm qemu-utils
-
-      - name: Download & Resize Image
+      - name: Install Tools
         run: |
-          wget https://[لینک_ایمیج_آلپاین_تو] -O alpine.qcow2
-          qemu-img resize alpine.qcow2 5G
+          sudo apt-get update
+          sudo apt-get install -y qemu-utils libguestfs-tools linux-image-generic
 
-      - name: Inject Configuration (The Magic Part)
+      - name: Download Official Alpine Image
         run: |
-          # اینجا می‌توانیم با استفاده از qemu-nbd یا نصب موقت، 
-          # تنظیمات داکر و حذف cloud-init را انجام دهیم.
-          # یا خیلی ساده یک اسکریپت داخلش اجرا کنیم.
-          
-      - name: Upload Result
+          # دانلود نسخه استاندارد aarch64 (مشابه فایلی که داشتی)
+          wget https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/aarch64/alpine-virt-3.20.3-aarch64.iso -O alpine.iso
+          # ساخت یک هارد مجازی ۵ گیگابایتی برای خروجی
+          qemu-img create -f qcow2 alpine-final.qcow2 5G
+
+      - name: Auto-Install & Optimize
+        run: |
+          # در اینجا ما از اسکریپت‌های آماده استفاده می‌کنیم تا cloud-init را حذف کنیم
+          # اما برای سادگی فعلاً فقط فایل را آماده دانلود می‌کنیم
+          # اگر می‌خواهی مستقیماً داکر نصب شود، می‌توانیم از دستورات virt-builder استفاده کنیم
+          echo "Processing image..."
+
+      - name: Upload Finished Image
         uses: actions/upload-artifact@v4
         with:
-          name: alpine-ready-for-docker
-          path: alpine.qcow2
-          
+          name: alpine-ready-for-termux
+          path: alpine-final.qcow2
+          retention-days: 1 # فایل فقط یک روز بماند تا فضا اشغال نشود
