@@ -24,6 +24,17 @@ jobs:
           sed -i 's/root:x:/root::/' passwd_tmp
           
           # ۲. اعمال تغییرات نهایی بدون دستورات حساس
+                - name: Expand Disk and Partition
+          run: |
+          # ۱. افزایش حجم فیزیکی فایل به ۱۰ گیگابایت
+          qemu-img resize alpine.qcow2 16G
+          
+          # ۲. استفاده از virt-resize برای گسترش پارتیشن‌ها به صورت خودکار
+          # این دستور پارتیشن روت را پیدا کرده و به اندازه کل فضای جدید بزرگ می‌کند
+          cp alpine.qcow2 alpine-orig.qcow2
+          virt-resize --expand /dev/sda2 alpine-orig.qcow2 alpine.qcow2 || \
+          virt-resize --expand /dev/sda3 alpine-orig.qcow2 alpine.qcow2
+          
           sudo guestfish -a alpine.qcow2 -i <<EOF
           # برگرداندن فایل پسورد اصلاح شده
           upload passwd_tmp /etc/passwd
