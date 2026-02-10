@@ -1,33 +1,49 @@
 name: Build Optimized Alpine for Termux
 on: 
-  workflow_dispatch: # اجرای دستی از تب Actions
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Install Tools
+      - name: Install Surgical Tools
         run: |
           sudo apt-get update
           sudo apt-get install -y qemu-utils libguestfs-tools linux-image-generic
 
-      - name: Download Official Alpine Image
+      - name: Download Latest Alpine Cloud Image
         run: |
-          # دانلود نسخه استاندارد aarch64 (مشابه فایلی که داشتی)
-          wget https://dl-cdn.alpinelinux.org/alpine/v3.20/releases/aarch64/alpine-virt-3.20.3-aarch64.iso -O alpine.iso
-          # ساخت یک هارد مجازی ۵ گیگابایتی برای خروجی
-          qemu-img create -f qcow2 alpine-final.qcow2 5G
+          wget https://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/cloud/nocloud_alpine-3.23.3-aarch64-uefi-cloudinit-metal-r0.qcow2 -O alpine.qcow2
 
-      - name: Auto-Install & Optimize
+      - name: Surgical Operation (Pre-install Docker & Remove Cloud-Init)
         run: |
-          # در اینجا ما از اسکریپت‌های آماده استفاده می‌کنیم تا cloud-init را حذف کنیم
-          # اما برای سادگی فعلاً فقط فایل را آماده دانلود می‌کنیم
-          # اگر می‌خواهی مستقیماً داکر نصب شود، می‌توانیم از دستورات virt-builder استفاده کنیم
-          echo "Processing image..."
+          export LIBGUESTFS_BACKEND=direct
+          sudo guestfish -a alpine.qcow2 -i <<EOF
+          # ۱. حذف کامل سرویس‌های cloud-init
+          sh "rm -f /etc/runlevels/default/cloud-*"
+          sh "rm -f /etc/runlevels/boot/cloud-*"
+          
+          # ۲. تنظیم مخازن (Repositories) برای نصب پکیج
+          sh "echo 'https://dl-cdn.alpinelinux.org/alpine/latest-stable/main' > /etc/apk/repositories"
+          sh "echo 'https://dl-cdn.alpinelinux.org/alpine/latest-stable/community' >> /etc/apk/repositories"
+          
+          # ۳. نصب داکر و تنظیمات اولیه (بدون نیاز به بوت)
+          # نکته: چون محیط ایزوله است، فقط پکیج‌ها را دانلود و نصب می‌کنیم
+          sh "apk update"
+          sh "apk add docker docker-compose"
+          sh "rc-update add docker boot"
+          
+          # ۴. حذف پسورد روت و تنظیمات دسترسی
+          sh "sed -i 's/root:x:/root::/' /etc/passwd"
+          sh "echo 'ttyAMA0' >> /etc/securetty"
+          
+          # ۵. تنظیم DNS
+          write /etc/resolv.conf "nameserver 8.8.8.8"
+          EOF
 
-      - name: Upload Finished Image
+      - name: Upload Docker-Ready Image
         uses: actions/upload-artifact@v4
         with:
-          name: alpine-ready-for-termux
-          path: alpine-final.qcow2
-          retention-days: 1 # فایل فقط یک روز بماند تا فضا اشغال نشود
+          name: alpine-docker-ready-v3.23.3
+          path: alpine.qcow2
+          retention-days: 1
