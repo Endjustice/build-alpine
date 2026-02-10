@@ -1,48 +1,28 @@
-name: Build Optimized Alpine
-on:
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Install Tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y qemu-utils libguestfs-tools linux-image-generic
-
-      - name: Download Alpine
-        run: |
-          # دانلود آخرین نسخه پایدار و رسمی
-          wget https://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/cloud/nocloud_alpine-3.23.3-aarch64-uefi-cloudinit-metal-r0.qcow2 -O alpine.qcow2
-
       - name: Surgical Operation
         run: |
           export LIBGUESTFS_BACKEND=direct
           sudo guestfish -a alpine.qcow2 -i <<EOF
-          # حذف سرویس‌های مزاحم با علامت (-) برای جلوگیری از ارور در صورت نبودن فایل
-          -glob rm /etc/runlevels/default/cloud-*
-          -glob rm /etc/runlevels/boot/cloud-*
-          -glob rm /etc/runlevels/shutdown/cloud-*
+          # ۱. حذف سرویس‌ها به روش مستقیم (بدون استفاده از دستورات سیستمی)
+          -rm /etc/runlevels/default/cloud-init
+          -rm /etc/runlevels/default/cloud-config
+          -rm /etc/runlevels/default/cloud-final
+          -rm /etc/runlevels/boot/cloud-init-local
           
-          # تنظیم مخازن پکیج‌ها برای نصب داکر در گوشی
+          # ۲. تنظیم مخازن
           write /etc/apk/repositories "https://dl-cdn.alpinelinux.org/alpine/latest-stable/main\nhttps://dl-cdn.alpinelinux.org/alpine/latest-stable/community"
           
-          # جراحی فایل passwd برای حذف پسورد روت (Login بدون پسورد)
-          download /etc/passwd /tmp/passwd
-          sh "sed -i 's/root:x:/root::/' /tmp/passwd"
-          upload /tmp/passwd /etc/passwd
+          # ۳. حذف پسورد روت به روش دستی (امن‌ترین روش)
+          # ما فایل رو دانلود می‌کنیم، روی خودِ اوبونتوی گیت‌هاب ویرایش می‌کنیم و برمی‌گردانیم
+          download /etc/passwd passwd_tmp
+          EOF
           
-          # تنظیم DNS گوگل برای اینترنت فوری
+          # ویرایش فایل روی سرور گیت‌هاب (خارج از محیط guestfish)
+          sed -i 's/root:x:/root::/' passwd_tmp
+          
+          # برگرداندن فایل به داخل ایمیج
+          sudo guestfish -a alpine.qcow2 -i <<EOF
+          upload passwd_tmp /etc/passwd
           write /etc/resolv.conf "nameserver 8.8.8.8"
-          
-          # اجازه لاگین از طریق ترمینال سریال (مهم برای QEMU)
           -write /etc/securetty "ttyAMA0"
           EOF
-
-      - name: Upload Result
-        uses: actions/upload-artifact@v4
-        with:
-          name: alpine-docker-ready
-          path: alpine.qcow2
           
