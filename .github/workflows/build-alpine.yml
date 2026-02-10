@@ -11,49 +11,44 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y qemu-utils libguestfs-tools linux-image-generic
 
-      - name: Download Alpine
+      - name: Download and Resize
         run: |
           wget https://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/cloud/nocloud_alpine-3.23.3-aarch64-uefi-cloudinit-metal-r0.qcow2 -O alpine.qcow2
+          # افزایش حجم به ۱۶ گیگ
+          qemu-img resize alpine.qcow2 16G
 
       - name: Surgical Operation
         run: |
           export LIBGUESTFS_BACKEND=direct
           
-          # ۱. استخراج فایل passwd برای حذف پسورد در محیط اوبونتو
+          # استخراج و اصلاح فایل پسورد روی اوبونتو
           sudo guestfish -a alpine.qcow2 -i download /etc/passwd passwd_tmp
           sed -i 's/root:x:/root::/' passwd_tmp
           
-          # ۲. اعمال تغییرات نهایی بدون دستورات حساس
-                - name: Expand Disk and Partition
-          run: |
-          # ۱. افزایش حجم فیزیکی فایل به ۱۰ گیگابایت
-          qemu-img resize alpine.qcow2 16G
-          
-          # ۲. استفاده از virt-resize برای گسترش پارتیشن‌ها به صورت خودکار
-          # این دستور پارتیشن روت را پیدا کرده و به اندازه کل فضای جدید بزرگ می‌کند
-          cp alpine.qcow2 alpine-orig.qcow2
-          virt-resize --expand /dev/sda2 alpine-orig.qcow2 alpine.qcow2 || \
-          virt-resize --expand /dev/sda3 alpine-orig.qcow2 alpine.qcow2
-          
-          sudo guestfish -a alpine.qcow2 -i <<EOF
-          # برگرداندن فایل پسورد اصلاح شده
+          # جراحی نهایی و بزرگ کردن پارتیشن داخلی
+          sudo guestfish -a alpine.qcow2 <<EOF
+          run
+          # حذف پسورد
           upload passwd_tmp /etc/passwd
-          
-          # حذف مستقیم فایل‌های سرویس (بدون ستاره و glob که ارور می‌داد)
+          # حذف سرویس‌های مزاحم
           -rm /etc/runlevels/default/cloud-init
           -rm /etc/runlevels/default/cloud-config
           -rm /etc/runlevels/default/cloud-final
           -rm /etc/runlevels/boot/cloud-init-local
-          
-          # تنظیمات شبکه و مخازن
+          # تنظیمات شبکه
           write /etc/apk/repositories "https://dl-cdn.alpinelinux.org/alpine/latest-stable/main\nhttps://dl-cdn.alpinelinux.org/alpine/latest-stable/community"
           write /etc/resolv.conf "nameserver 8.8.8.8"
           -write /etc/securetty "ttyAMA0"
+          # بزرگ کردن پارتیشن (مهم برای داکر)
+          -part-grow /dev/sda 2
+          -resize2fs /dev/sda2
+          -part-grow /dev/sda 3
+          -resize2fs /dev/sda3
           EOF
 
       - name: Upload Result
         uses: actions/upload-artifact@v4
         with:
-          name: alpine-docker-ready
+          name: alpine-docker-ready-16GB
           path: alpine.qcow2
           
