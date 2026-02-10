@@ -1,0 +1,50 @@
+name: Build Optimized Alpine for Termux
+on: 
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Surgical Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-utils libguestfs-tools linux-image-generic
+
+      - name: Download Latest Alpine Cloud Image
+        run: |
+          wget https://dl-cdn.alpinelinux.org/alpine/latest-stable/releases/cloud/nocloud_alpine-3.23.3-aarch64-uefi-cloudinit-metal-r0.qcow2 -O alpine.qcow2
+
+      - name: Surgical Operation (Pre-install Docker & Remove Cloud-Init)
+        run: |
+          export LIBGUESTFS_BACKEND=direct
+          sudo guestfish -a alpine.qcow2 -i <<EOF
+          # ۱. حذف کامل سرویس‌های cloud-init
+          sh "rm -f /etc/runlevels/default/cloud-*"
+          sh "rm -f /etc/runlevels/boot/cloud-*"
+          
+          # ۲. تنظیم مخازن (Repositories) برای نصب پکیج
+          sh "echo 'https://dl-cdn.alpinelinux.org/alpine/latest-stable/main' > /etc/apk/repositories"
+          sh "echo 'https://dl-cdn.alpinelinux.org/alpine/latest-stable/community' >> /etc/apk/repositories"
+          
+          # ۳. نصب داکر و تنظیمات اولیه (بدون نیاز به بوت)
+          # نکته: چون محیط ایزوله است، فقط پکیج‌ها را دانلود و نصب می‌کنیم
+          sh "apk update"
+          sh "apk add docker docker-compose"
+          sh "rc-update add docker boot"
+          
+          # ۴. حذف پسورد روت و تنظیمات دسترسی
+          sh "sed -i 's/root:x:/root::/' /etc/passwd"
+          sh "echo 'ttyAMA0' >> /etc/securetty"
+          
+          # ۵. تنظیم DNS
+          write /etc/resolv.conf "nameserver 8.8.8.8"
+          EOF
+
+      - name: Upload Docker-Ready Image
+        uses: actions/upload-artifact@v4
+        with:
+          name: alpine-docker-ready-v3.23.3
+          path: alpine.qcow2
+          retention-days: 1
+          
